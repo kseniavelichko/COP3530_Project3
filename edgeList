@@ -1,0 +1,505 @@
+#include <iostream>
+#include <fstream>
+#include <algorithm>
+#include <sstream>
+#include <queue>
+#include<set>
+#include<math.h>
+#include<list>
+#include <unordered_map>
+using namespace std;
+#include <vector>
+
+class Movie {
+    public:
+    string IMDB;
+    string title;
+    string year;
+    string genre;
+    set<string> actors;
+    Movie (string imdb, string title, string year, string gen) {
+        IMDB = imdb;
+        this->title = title;
+        this->year = year;
+        this->genre = gen;
+    }
+    void printMovie() {
+        cout << "\t\t\"" << title << "\" (" << year << ") " << endl;
+    }
+};
+class Actor {
+public:
+    string name;
+    string imdb;
+    set<Movie*> movies;
+    unordered_map<string, set<Movie*>> actorMap;
+    set<string> adjacent;
+    vector<string> adjacentV;
+    Actor(string name, string imdb) {
+        this->name = name;
+        this->imdb = imdb;
+    }
+    void printActor() {
+        cout << "\tName: " << name << endl;
+        cout << "\tMovies: " << endl;
+        for (Movie* i : movies)
+            i->printMovie();
+    }
+};
+
+class Graph
+{
+public:
+    list<pair<pair<string, string>, set<Movie*>>> edges;
+    unordered_map<string, Actor*> actorNames;
+
+public:
+    unordered_map<string, int> vMapper;
+    int currV = 0;
+    int vertices;
+    Graph(int vertices, unordered_map<string, Actor *> *input) {
+        this->actorNames = *input;
+        this->vertices = vertices;
+    }
+    set<string> bfs(string src) {
+        set<string> result;
+        set<string> visited;
+        queue<string> q;
+        visited.insert(src);
+        q.push(src);
+
+        while (!q.empty()) {
+            string u = q.front();
+            result.insert(u);
+            q.pop();
+            set<string> adj = getAdjacent(u);
+            for (auto v : adj) {
+                if (visited.count(v) == 0) {
+                    visited.insert(v);
+                    q.push(v);
+                }
+            }
+        }
+        return result;
+    }
+    void pathOfActors(vector<string> &path, unordered_map<int, string> pred, string index) {
+        if (pred[vMapper[index]] == "-1")
+            return;
+        pathOfActors(path, pred, pred[vMapper[index]]);
+        path.push_back(actorNames[pred[vMapper[index]]]->imdb);
+    }
+    pair<unordered_map<int,int>, unordered_map<int, string>> dijkstra(string src) {
+        set<string> S; //contains vertices for which we have computed shortest distance
+        set<string> VS; //contains vertices that still need to be processed;
+
+        set<string> InBFS = bfs(src);
+        //unordered_map<string, int> vMapper = vMapper;
+        unordered_map<int, int> distance;
+        unordered_map<int, string> pred;
+
+        for (auto iter = InBFS.begin(); iter != InBFS.end(); iter++) {
+            VS.insert(*iter);
+            distance[vMapper[*iter]] = 200;
+            pred[vMapper[*iter]] = "-1";
+        }
+        distance[vMapper[src]] = 0;
+        while (!VS.empty()) {
+            int minDistance = 200;
+
+            string toBeComputed;
+
+            for (auto iter = VS.begin(); iter != VS.end(); iter++) {
+                if (distance[vMapper[*iter]] < minDistance) {
+                    toBeComputed = *iter;
+                    minDistance = distance[vMapper[*iter]];
+                }
+            }
+
+            S.insert(toBeComputed);
+            VS.erase(toBeComputed);
+
+            set<string> adjacent = getAdjacent(toBeComputed);
+
+            if (adjacent.size() != 0) {
+                for (auto iter = adjacent.begin(); iter != adjacent.end(); iter++) {
+                    int weight = getWeight(toBeComputed, *iter);
+                    if (distance[vMapper[*iter]] > (distance[vMapper[toBeComputed]] + weight)) {
+                        distance[vMapper[*iter]] = distance[vMapper[toBeComputed]] + weight;
+                        pred[vMapper[*iter]] = toBeComputed;
+                    }
+
+                }
+            }
+        }
+        return make_pair(distance, pred);
+    }
+    void insertEdge(string from, string to, set<Movie*> movies) {
+        pair<string, string> pair2(from, to);
+        pair<pair<string, string>, set<Movie*>> pair1;
+        pair1.first = pair2;
+        pair1.second = movies;
+        edges.push_back(pair1);
+        actorNames[from]->adjacent.insert(to);
+        actorNames[to]->adjacent.insert(from);
+        if (vMapper.find(from) == vMapper.end()) {
+            vMapper[from] = currV;
+            currV++;
+        }
+        if (vMapper.find(to) == vMapper.end()) {
+            vMapper[to] = currV;
+            currV++;
+        }
+    }
+    int getWeight(string from, string to) {
+        return actorNames[from]->actorMap[to].size();
+    }
+    set<string>& getAdjacent(string vertex) {
+        if (actorNames.find(vertex) != actorNames.end()) {
+            //cout << actorMap[vertex]->adjacent.size();
+            return actorNames[vertex]->adjacent;
+        }
+        set<string> x;
+        return x;
+    }
+    void printGraph() {
+        for (auto iter = edges.begin(); iter != edges.end(); iter++) {
+            cout << "From: " << iter->first.first << " To: " << iter->first.second << " #: " << iter->second.size()
+                 << endl;
+            cout << "Weight: " << getWeight(iter->first.first, iter->first.second) << " ";
+            for (auto it : getAdjacent(iter->first.first))
+                cout << it << " ";
+            for (Movie *x : iter->second) {
+                cout << x->IMDB << " ";
+            }
+            cout << endl;
+        }
+    }
+};
+
+void ReadMovieFile(unordered_map<string, Movie*> *movieMap, string genreFind) {
+    //Obtaining movie data
+    string line;
+    cout << endl << "...Processing..." << endl;
+    ifstream myFile("IMDb movies.csv");
+    getline(myFile, line);
+    while(getline(myFile, line)) {
+        string IMDB, title, null, year, genre, temp;
+        stringstream currentStream(line);
+        getline(currentStream, IMDB, ',');
+        getline(currentStream, title, ',');
+        for (int i = 0; i < title.length(); i++) {
+            if (title.at(i) == '"') {
+                getline(currentStream, temp, '"');
+                title = title.substr(1, title.length()) + temp;
+                break;
+            }
+        }
+        getline(currentStream, null, ',');
+        if (null == "") {
+            getline(currentStream, null, ',');
+            for (int i = 0; i < null.length(); i++) {
+                if (null.at(i) == '"') {
+                    getline(currentStream, temp, '"');
+                    null = null.substr(1, null.length()) + temp;
+                    getline(currentStream, null, ',');
+                    break;
+                }
+            }
+        }
+        getline(currentStream, year, ',');
+        getline(currentStream, null, ',');
+        getline(currentStream, genre, ',');
+        for (int i = 0; i < genre.length(); i++) {
+            if (genre.at(i) == '"') {
+                getline(currentStream, temp, '"');
+                genre = genre.substr(1, genre.length()) + "," + temp;
+                getline(currentStream, temp, ',');
+                break;
+            }
+        }
+        string currGenre = "";
+        for (int i = 0; i < genre.length(); i++) {
+            if (isalpha(genre.at(i)))
+                currGenre = currGenre + genre.at(i);
+            if (currGenre == genreFind) {
+                if (movieMap->find(IMDB) == movieMap->end())
+                    (*movieMap)[IMDB] = new Movie(IMDB, title, year, genre);
+                break;
+            }
+            if (genre.at(i) == ',' || genre.at(i) == '-') {
+                if (currGenre == genreFind) {
+                    if (movieMap->find(IMDB) == movieMap->end())
+                        (*movieMap)[IMDB] = new Movie(IMDB, title, year, genre);
+                    break;
+                }
+                currGenre = "";
+            }
+        }
+    }
+}
+string Genre() {
+    vector<string> genres = {"", "Romance", "Crime", "Drama", "Fantasy", "Mystery", "Family", "Sci", "Comedy", "Biography", "History", "Adventure", "War", "Horror", "Action", "Western"};
+    string genreFind;
+    cout << "Genre options: (please enter the number of your choice)" << endl;
+    cout << "1. Romance" << "\t9. Biography" << endl << "2. Crime" << "\t10. History" << endl;
+    cout << "3. Drama" << "\t11. Adventure" << endl << "4. Fantasy" << "\t12. War" << endl;
+    cout << "5. Mystery" << "\t13. Horror" << endl << "6. Family" << "\t14. Action" << endl;
+    cout << "7. Sci-Fi" << "\t15. Western" << endl << "8. Comedy";
+    int genreChoice;
+    cout << endl << "Your choice: ";
+    cin >> genreChoice;
+    genreFind = genres[genreChoice];
+    return genreFind;
+}
+void ReadNameFile(unordered_map<string, Movie*> *movieMap, unordered_map<string, Actor*> *actorMap){
+    //Obtaining name data
+    string line;
+    ifstream nameFile("IMDb names.csv");
+    getline(nameFile, line);
+    while(getline(nameFile, line)) {
+        if (line.substr(0,2) != "nm")
+            continue;
+        string imdb, name, null;
+        stringstream currentStream(line);
+        getline(currentStream, imdb, ',');
+        getline(currentStream, name, ',');
+        if (actorMap->find(imdb) == actorMap->end()) {
+            (*actorMap)[imdb] = new Actor(name, imdb);
+        }
+    }
+    cout << endl << "...Loading Actors..." << endl;
+    //Obtaining title data
+    ifstream otherFile("IMDb title_principals.csv");
+    getline(otherFile, line);
+    while(getline(otherFile, line)) {
+        string movie, null, name, prof;
+        stringstream currentStream(line);
+        getline(currentStream, movie, ',');
+        getline(currentStream, null, ',');
+        getline(currentStream, name, ',');
+        getline(currentStream, prof, ',');
+        if (movieMap->find(movie) == movieMap->end()) {
+            continue;
+        }
+        else if (actorMap->find(name) != actorMap->end()) {
+            if (prof.substr(0, 3) != "act")
+                actorMap->erase(name);
+            else {
+                actorMap->find(name)->second->movies.insert((*movieMap)[movie]);
+            }
+        }
+    }
+    set<string> toDelete;
+    for (auto iter = actorMap->begin(); iter != actorMap->end(); iter++) {
+        if (iter->second->movies.size() == 0)
+            toDelete.insert(iter->first);
+    }
+    for (auto iter = toDelete.begin(); iter != toDelete.end(); iter++) {
+        (*actorMap)[*iter]->imdb = "ERASED";
+
+        actorMap->erase(*iter);
+    }
+    //at each movie I have the list of actors in that movie
+    for (auto iter = actorMap->begin(); iter != actorMap->end(); iter++) {
+        if (iter->second->movies.size() != 0) {
+            for (Movie* movie : iter->second->movies) {
+                if (movieMap->find(movie->IMDB) != movieMap->end())
+                    movie->actors.insert(iter->first);
+            }
+        }
+    }
+    cout << "...Processing..." << endl;
+    //for each actor, there is a map of actors that are connected to that actor and the movies they share
+    for (auto iter = actorMap->begin(); iter != actorMap->end(); iter++) {
+        if (iter->second->movies.size() != 0) {
+            for (Movie* movie : iter->second->movies) {
+                if (movieMap->find(movie->IMDB) != movieMap->end()) {
+                    for (string actor : movie->actors) {
+                        iter->second->actorMap[actor].insert(movie);
+                    }
+                }
+            }
+        }
+    }
+};
+
+int main() {
+    string line;
+    unordered_map<string, Movie*> movieMap;
+    unordered_map<string, Actor*> actorNames;
+    cout << "Welcome to our COP3530 Project featuring a graph of actors we love and admire!" << endl;
+    cout << endl;
+
+    int input = -1;
+    while (input < 1 || input > 2) {
+
+        cout << "Main Menu:" << endl;
+        cout << "\t Please select one of the following options: " << endl;
+        cout << "\t 1. Load Data" << endl;
+        cout << "\t 2. Exit " << endl;
+        cout << "Input: ";
+        cin >> input;
+
+        if (input == 2) {
+            cout << "Program exited successfully!" << endl;
+            exit(0);
+        }
+
+    }
+    input = -1;
+    while (input < 1 || input > 2) {
+
+        cout << "Please select one of the following implementations: " << endl;
+        cout << "\t 1. Adjacency List" << endl;
+        cout << "\t 2. Edge List" << endl;
+        cout << "Input: ";
+        cin >> input;
+
+    }
+    //First process movie file
+    string genreFind = Genre();
+    ReadMovieFile(&movieMap, genreFind);
+    if (genreFind == "Sci") {genreFind = "Sci-Fi";}
+    cout << "...Loading Files..." << endl << endl << "Number of movies loaded in " << genreFind << " genre: " << movieMap.size() << endl;
+    //for (auto iter = movieMap.begin(); iter != movieMap.end(); iter++) {
+     //   iter->second->printMovie();
+    //}
+    //then process names
+    ReadNameFile(&movieMap, &actorNames);
+    cout << endl << "Number of actors in " << genreFind << " movies: " << actorNames.size();
+
+    if (input == 1) {
+        //go the route of adjacency list
+    }
+    if (input == 2) {
+        Graph myTentativeGraph(actorNames.size(), &actorNames);
+        cout << endl << "Available Actors: ";
+        int count = 0;
+        vector<string> actorsAvail (actorNames.size() + 1);
+        for (auto iter = actorNames.begin(); iter != actorNames.end(); iter++) {
+            count++;
+            actorsAvail[count] = iter->second->name;
+            if (count % 5 == 0)
+                cout << endl;
+            cout << count << ". ";
+
+            if (count == actorNames.size())
+                cout << iter->second->name << endl;
+            else
+                cout << iter->second->name << ", ";
+            for (auto i = iter->second->actorMap.begin(); i != iter->second->actorMap.end(); i++) {
+                string from = iter->first;
+                string to = i->first;
+                if (from != to)
+                    myTentativeGraph.insertEdge(from, to, i->second);
+            }
+        }
+        cout << endl;
+        int first, second;
+        string actor1 = "";
+        string actor2 = "";
+        cout << "Please enter the option numbers of two actors you choose from the above list: " << endl;
+        cout << "\tActor One: ";
+        cin >> first;
+        cout << "\tActor Two: ";
+        cin >> second;
+        if (first > 0 && first < (actorsAvail.size() + 1)) {
+            actor1 = actorsAvail[first];
+        }
+        if (second > 0 && second < (actorsAvail.size() + 1)) {
+            actor2 = actorsAvail[second];
+        }
+        if (actor1 == "" || actor2 == "") {
+            cout << "Invalid input";
+        }
+        cout << endl;
+        cout << "Data on actors selected: " << endl;
+        string IMDB1;
+        string IMDB2;
+        for (auto iter = actorNames.begin(); iter != actorNames.end(); iter++) {
+            if (iter->second->name == actor1) {
+                iter->second->printActor();
+                IMDB1 = iter->first;
+            }
+            if (iter->second->name == actor2) {
+                iter->second->printActor();
+                IMDB2 = iter->first;
+            }
+        }
+
+        set<string> BFS = myTentativeGraph.bfs(IMDB1);
+        unordered_map<string, int> vMap = myTentativeGraph.vMapper;
+        if (BFS.find(IMDB2) != BFS.end()) {
+            unordered_map<int, int> distance = myTentativeGraph.dijkstra(IMDB1).first;
+            unordered_map<int, string> pred = myTentativeGraph.dijkstra(IMDB1).second;
+            if (distance[vMap[IMDB2]] != 200 && distance[vMap[IMDB2]] != 0) {
+                cout << endl;
+                cout << "These two actors are connected by the path: " << endl;
+                vector<string> path;
+                myTentativeGraph.pathOfActors(path, pred, IMDB2);
+                //cout << "\t";
+                string prev = IMDB2;
+                for (int i = 0; i < path.size(); i++) {
+                    cout << "\t" << actorNames[path[i]]->name << " is connected to ";
+                    if (path.size() > (i + 1)) {
+                        cout << actorNames[path[i+1]]->name;
+                        cout << " by " << actorNames[path[i]]->actorMap[path[i + 1]].size() << " movie(s)" << endl;
+                        for (Movie* movie : actorNames[path[i]]->actorMap[path[i+1]])
+                            movie->printMovie();
+                    }
+                    if (i != (path.size()-1))
+                        cout << endl;
+                }
+                cout << actorNames[IMDB2]->name;
+                cout << " by " << actorNames[IMDB2]->actorMap[path[path.size() - 1]].size() << " movie(s)" << endl;
+                for (Movie* movie : actorNames[IMDB2]->actorMap[path[path.size() - 1]])
+                    movie->printMovie();
+
+            }
+        }
+        else {
+            cout << endl;
+            cout << "These actors are not connected, but fear not: " << endl;
+            cout << "\tSome other actors you might enjoy in connection to " << actorNames[IMDB1]->name << " include..." << endl;
+            unordered_map<string, set<Movie*>> currentActor = actorNames[IMDB1]->actorMap;
+            int currMax = 0;
+            string currTop;
+            for (auto iter = currentActor.begin(); iter != currentActor.end(); iter++) {
+                if (iter->second.size() > currMax) {
+                    currMax = iter->second.size();
+                    currTop = iter->first;
+                }
+            }
+            if (currMax != 0) {
+                cout << "\t" << actorNames[currTop]->name << "! With whom " << actorNames[IMDB1]->name << " shares "
+                     << currMax << " movie(s)!" << endl;
+                for (int i = 0; i < currMax; i++) {
+                    for (Movie *movie : currentActor[currTop])
+                        movie->printMovie();
+                    if (i > 3)
+                        break;
+                }
+            }
+            cout << "\tSome other actors you might enjoy in connection to " << actorNames[IMDB2]->name << " include...";
+            currentActor = actorNames[IMDB2]->actorMap;
+            currMax = 0;
+            for (auto iter = currentActor.begin(); iter != currentActor.end(); iter++) {
+                if (iter->second.size() > currMax) {
+                    currMax = iter->second.size();
+                    currTop = iter->first;
+                }
+            }
+            if (currMax != 0) {
+                cout << "\t" << actorNames[currTop]->name << "! With whom " << actorNames[IMDB2]->name << " shares "
+                     << currMax << " movie(s)!" << endl;
+                for (int i = 0; i < currMax; i++) {
+                    for (Movie *movie : currentActor[currTop])
+                        movie->printMovie();
+                    if (i > 3)
+                        break;
+                }
+            }
+        }
+    }
+    return 0;
+}
