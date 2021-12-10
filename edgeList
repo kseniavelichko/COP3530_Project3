@@ -42,7 +42,7 @@ public:
     void printActor() {
         cout << "\tName: " << name << endl;
         cout << "\tMovies: " << endl;
-        for (Movie* i : movies)
+        for (Movie* i : movies) // Time complexity O(n), n being number of movies the actor has been in
             i->printMovie();
     }
 };
@@ -61,19 +61,19 @@ public:
         this->actorNames = *input;
         this->vertices = vertices;
     }
-    set<string> bfs(string src) {
+    set<string> bfs(string src) { //overall time complexity O(V * adjacent)
         set<string> result;
         set<string> visited;
         queue<string> q;
         visited.insert(src);
         q.push(src);
 
-        while (!q.empty()) {
+        while (!q.empty()) { //This only runs the number of vertices in src's connected graph = O(V)
             string u = q.front();
             result.insert(u);
             q.pop();
             set<string> adj = getAdjacent(u);
-            for (auto v : adj) {
+            for (auto v : adj) { //O(adjacent)
                 if (visited.count(v) == 0) {
                     visited.insert(v);
                     q.push(v);
@@ -90,7 +90,8 @@ public:
         pathOfActors(path, pred, pred[vMapper[index]]);
         path.push_back(actorNames[pred[vMapper[index]]]->imdb);
     }
-    pair<unordered_map<int,int>, unordered_map<int, string>> dijkstra(string src) {
+    
+    pair<unordered_map<int,int>, unordered_map<int, string>> dijkstra(string src) { //Overall complexity: O(V + V * (V + Adjacent)) where V is the vertices in src's connected graph
         set<string> S; //contains vertices for which we have computed shortest distance
         set<string> VS; //contains vertices that still need to be processed;
 
@@ -99,18 +100,18 @@ public:
         unordered_map<int, int> distance;
         unordered_map<int, string> pred;
 
-        for (auto iter = InBFS.begin(); iter != InBFS.end(); iter++) {
+        for (auto iter = InBFS.begin(); iter != InBFS.end(); iter++) { //Uses bfs of graph from the src. Time complexity: O(V) where n is the number of vertices in src's connected graph
             VS.insert(*iter);
             distance[vMapper[*iter]] = 200;
             pred[vMapper[*iter]] = "-1";
         }
         distance[vMapper[src]] = 0;
-        while (!VS.empty()) {
+        while (!VS.empty()) { //time complexity is O(n), the same as for iterating through the BFS
             int minDistance = 200;
 
             string toBeComputed;
 
-            for (auto iter = VS.begin(); iter != VS.end(); iter++) {
+            for (auto iter = VS.begin(); iter != VS.end(); iter++) { //Time complexity is O(V)
                 if (distance[vMapper[*iter]] < minDistance) {
                     toBeComputed = *iter;
                     minDistance = distance[vMapper[*iter]];
@@ -123,7 +124,7 @@ public:
             set<string> adjacent = getAdjacent(toBeComputed);
 
             if (adjacent.size() != 0) {
-                for (auto iter = adjacent.begin(); iter != adjacent.end(); iter++) {
+                for (auto iter = adjacent.begin(); iter != adjacent.end(); iter++) { //Time complexity is O(Adjacent) where m is the number of vectors adjacent to src
                     int weight = getWeight(toBeComputed, *iter);
                     if (distance[vMapper[*iter]] > (distance[vMapper[toBeComputed]] + weight)) {
                         distance[vMapper[*iter]] = distance[vMapper[toBeComputed]] + weight;
